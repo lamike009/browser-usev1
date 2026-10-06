@@ -1,0 +1,16 @@
+[Unit]
+Description=adlib-agent browser-use oneshot (one Chromium worker)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+WorkingDirectory=/home/deploy/browser-use-v1
+EnvironmentFile=/home/deploy/browser-use-v1/.env
+ExecStart=/home/deploy/browser-use-v1/.venv/bin/python agent_runner.py
+# The runner retries Gemini 429/5xx itself. Leave Restart unset so systemd
+# does not start a second Chromium. The process lock refuses an overlapping run.
+
+[Install]
+WantedBy=multi-user.target

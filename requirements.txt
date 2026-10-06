@@ -1,0 +1,3 @@
+browser-use==0.13.10
+python-dotenv==1.2.2
+pydantic==2.13.5
