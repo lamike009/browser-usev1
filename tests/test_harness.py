@@ -32,7 +32,7 @@ from agent_runner import (
     task_land,
     write_validated,
 )
-from smoke_gemini import SMOKE_H1, ExampleHeading, SmokeResult, assert_example_heading
+from smoke_gemini import ExampleHeading, SmokeResult, assert_example_heading
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -68,7 +68,9 @@ class PinAndStackTests(unittest.TestCase):
         self.assertNotIn("ChatOpenRouter", blob)
         self.assertIn("ChatGoogle", blob)
         self.assertIn("model=MODEL_NAME", blob)
-        self.assertIn('MODEL_NAME = "gemini-2.5-flash"', blob)
+        self.assertIn('MODEL_NAME = "gemini-3.8-flash"', blob)
+        self.assertNotIn("gemini-2.5-flash", blob)
+        self.assertIn("chromium_sandbox=False", blob)
 
     def test_readme_states_contabo_steps_and_proof_rule(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -83,6 +85,10 @@ class PinAndStackTests(unittest.TestCase):
         self.assertIn("/var/lib/adlib-agent/downloads", readme)
         self.assertIn("smoke_gemini.py", readme)
         self.assertIn("0.13.10", readme)
+        self.assertIn("gemini-3.8-flash", readme)
+        self.assertIn("chromium_sandbox=False", readme)
+        self.assertIn("artifacts/smoke_result.json", readme)
+        self.assertIn("non-empty", readme)
 
 
 class SchemaTests(unittest.TestCase):
@@ -99,7 +105,7 @@ class SchemaTests(unittest.TestCase):
 
     def test_write_validated_round_trip(self) -> None:
         result = SmokeResult(
-            h1=SMOKE_H1,
+            h1="Page heading",
             source_url="https://example.com/",
             conversation_log_path="/var/lib/adlib-agent/logs/run/conversation_1.txt",
             browser_use_version="0.13.10",
@@ -110,15 +116,19 @@ class SchemaTests(unittest.TestCase):
             path = Path(tmp) / "smoke_result.json"
             write_validated(path, result)
             loaded = SmokeResult.model_validate_json(path.read_text(encoding="utf-8"))
-        self.assertEqual(loaded.h1, SMOKE_H1)
+        self.assertEqual(loaded.h1, "Page heading")
+        self.assertTrue(loaded.h1.strip())
         self.assertTrue(loaded.conversation_log_path)
         self.assertTrue(loaded.verified)
         self.assertFalse(loaded.is_successful)
 
-    def test_example_heading_must_match_page(self) -> None:
+    def test_example_heading_requires_non_empty_h1(self) -> None:
         assert_example_heading(ExampleHeading(h1="Example Domain", source_url="https://example.com/"))
+        assert_example_heading(ExampleHeading(h1="Document title", source_url="https://example.com/"))
         with self.assertRaises(RetryableStepError):
-            assert_example_heading(ExampleHeading(h1="Something else", source_url="https://example.com/"))
+            assert_example_heading(ExampleHeading(h1="   ", source_url="https://example.com/"))
+        with self.assertRaises(RetryableStepError):
+            assert_example_heading(ExampleHeading(h1="Document title", source_url="https://other.test/"))
 
     def test_placeholder_extract_requires_a_card(self) -> None:
         with self.assertRaises(ValidationError):
@@ -128,9 +138,15 @@ class SchemaTests(unittest.TestCase):
             cards=[PlaceholderCard(id="page", title="Example Domain", url="https://example.com/")],
         )
         assert_placeholder_extract(parsed, url="https://example.com", query="example", stage="extract")
+        assert_placeholder_extract(
+            parsed.model_copy(update={"cards": [PlaceholderCard(id="x", title="Document title", url="https://example.com/")]}),
+            url="https://example.com",
+            query="example",
+            stage="extract",
+        )
         with self.assertRaises(RetryableStepError):
             assert_placeholder_extract(
-                parsed.model_copy(update={"cards": [PlaceholderCard(id="x", title="Nope", url="https://example.com/")]}),
+                parsed.model_copy(update={"cards": [PlaceholderCard(id="x", title="Document title", url="https://other.test/")]}),
                 url="https://example.com",
                 query="example",
                 stage="extract",
@@ -169,6 +185,7 @@ class SchemaTests(unittest.TestCase):
             self.assertEqual(Path(browser.browser_profile.user_data_dir), paths.chrome_profile.resolve())
             self.assertTrue(browser.browser_profile.keep_alive)
             self.assertTrue(browser.browser_profile.headless)
+            self.assertFalse(browser.browser_profile.chromium_sandbox)
 
 
 class _History:

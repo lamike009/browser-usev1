@@ -1,6 +1,6 @@
 # browser-use V1 (Contabo + Gemini Flash)
 
-One headless Chromium worker for a short browse chain. The pin is `browser-use==0.13.10`. The model is `ChatGoogle(model="gemini-2.5-flash")`. The only secret is `GOOGLE_API_KEY`.
+One headless Chromium worker for a short browse chain. The pin is `browser-use==0.13.10`. The model is `ChatGoogle(model="gemini-3.8-flash")`. The only secret is `GOOGLE_API_KEY`.
 
 Chromium comes from `uvx browser-use install` (CDP / browser-harness). This checkout does not use Playwright as the browser driver, Browser Use Cloud, or OpenRouter.
 
@@ -9,7 +9,7 @@ Chromium comes from `uvx browser-use install` (CDP / browser-harness). This chec
 | Item | Value |
 | --- | --- |
 | Package | `browser-use==0.13.10` |
-| LLM | `ChatGoogle(model="gemini-2.5-flash")` |
+| LLM | `ChatGoogle(model="gemini-3.8-flash")` |
 | Env | `GOOGLE_API_KEY` |
 | Browser | Chromium via `uvx browser-use install` |
 | Concurrency | 1 worker |
@@ -91,7 +91,23 @@ uvx browser-use install
 python smoke_gemini.py
 ```
 
-Smoke opens `https://example.com`, extracts the h1, and writes `artifacts/smoke_result.json`. The file includes `h1`, `source_url`, and `conversation_log_path`. `verified` is true only after the schema check. `is_successful` is recorded in that file and is not the pass condition.
+Smoke opens `https://example.com` and writes `artifacts/smoke_result.json`. Pass is a schema-valid file whose `h1` is non-empty. If the page has no h1, the agent writes the document title into `h1`. The file also includes `source_url` and `conversation_log_path`. `verified` is true only after the schema check. `is_successful` is recorded in that file and is not the pass condition.
+
+Google returns 404 for `gemini-2.5-flash` on new keys and names `models/gemini-3.8-flash`. `ChatGoogle` takes that id as `gemini-3.8-flash`. Chromium on Contabo is started with `chromium_sandbox=False`.
+
+## Contabo re-smoke
+
+After this branch is pulled (or after it is merged to `main` and pulled):
+
+```bash
+cd ~/browser-use-v1
+git pull
+source .venv/bin/activate
+python smoke_gemini.py
+python -c "import json; payload=json.load(open('artifacts/smoke_result.json')); assert payload['h1'].strip(); print(payload['h1'])"
+```
+
+That command prints the heading only when `artifacts/smoke_result.json` has a non-empty `h1`. is_successful alone is not proof.
 
 The chained runner uses the same rule. It writes `/var/lib/adlib-agent/logs/<run_id>/result.json` plus the conversation log under that run id.
 
@@ -115,6 +131,7 @@ python -m unittest tests.test_harness
 Browser(
     keep_alive=True,
     headless=True,
+    chromium_sandbox=False,
     user_data_dir="/var/lib/adlib-agent/chrome-profile",
     downloads_path="/var/lib/adlib-agent/downloads",
 )
